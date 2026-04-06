@@ -178,7 +178,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         default="nyu",
-        choices=("nyu", "icvl", "msra"),
+        choices=("nyu", "icvl", "msra", "dart"),
         type=str,
         help="which dataset to use",
     )
@@ -239,6 +239,14 @@ if __name__ == "__main__":
             basepath=os.environ.get("MSRA_PATH"),
             LeaveOut_subject=setting.leaveout_subject,
             use_default_cube=setting.use_default_cube,
+        )
+    elif args.dataset == "dart":
+        print("DART dataset will be used")
+        test_set = DartHandPoseDataset(
+            train=False,
+            basepath=os.environ.get("DART_PATH", setting.datasetpath),
+            cropSize=(setting.cropSize, setting.cropSize),
+            cropSize3D=[setting.cubic_size, setting.cubic_size, setting.cubic_size],
         )
 
     if args.cuda_id == -1:
