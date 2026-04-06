@@ -207,6 +207,12 @@ if __name__ == "__main__":
     list_files = os.listdir(args.path)
     list_files.sort(key=getNumber)
 
+    if len(list_files) == 0:
+        raise FileNotFoundError(
+            f"No checkpoint files found under '{args.path}'. "
+            "Please make sure training produced at least one savedModel_E*.pt file."
+        )
+
     model_path = os.path.join(args.path, list_files[0])
     setting = torch.load(model_path)["args"]
     args.dataset = setting.dataset
