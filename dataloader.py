@@ -11,18 +11,96 @@ import copy
 import pickle
 import struct
 from scipy import stats, ndimage
+from dart_data_loader import PortableDartDataset
 
 
 DATASET_LENGTHS={};
 DATASET_LENGTHS["nyu"] = 72757
 DATASET_LENGTHS["icvl"] = 22067
 DATASET_LENGTHS["msra"] = 76375 - 8500
+DATASET_LENGTHS["dart"] = 0
 
 
 DATASET_NUM_JOINTS = {};
 DATASET_NUM_JOINTS["nyu"]=14
 DATASET_NUM_JOINTS["icvl"]=16
 DATASET_NUM_JOINTS["msra"]=21
+DATASET_NUM_JOINTS["dart"]=21
+
+
+class DartHandPoseDataset(Dataset):
+    """Adapter that makes PortableDartDataset compatible with TriHorn training/eval loops."""
+
+    def __init__(
+        self,
+        basepath="",
+        train=True,
+        cropSize=(128, 128),
+        cropSize3D=(280, 280, 280),
+        indeces=None,
+        **kwargs,
+    ):
+        del train, kwargs
+        if cropSize[0] != cropSize[1]:
+            raise ValueError("DART loader expects square cropSize")
+
+        self._crop_size = int(cropSize[0])
+        self._cube = np.array(cropSize3D, dtype=np.float32)
+        self.dataset = PortableDartDataset(
+            root_dir=basepath,
+            transform=None,
+            crop_size=self._crop_size,
+            bbox_padding=20,
+        )
+        self.num_joints = DATASET_NUM_JOINTS["dart"]
+        self.numSamples = len(self.dataset)
+        self.indeces = list(range(self.numSamples)) if indeces is None else list(indeces)
+        self.numSamples = len(self.indeces)
+
+    def __len__(self):
+        return self.numSamples
+
+    def __getitem__(self, index):
+        sample = self.dataset[self.indeces[index]]
+
+        image = np.asarray(sample["image"], dtype=np.float32)
+        if image.ndim == 3:
+            image = image[:, :, 0]
+        image = image / 255.0
+        image = image * 2.0 - 1.0
+        image = torch.from_numpy(np.expand_dims(image, axis=0)).float()
+
+        uv = sample["keypoints_2d"].clone()
+        com_z = torch.tensor(0.0, dtype=torch.float32)
+        if sample["keypoints_3d"] is not None:
+            com_z = sample["keypoints_3d"][:, 2].mean()
+            depth = (sample["keypoints_3d"][:, 2] - com_z) / (self._cube[2] / 2.0)
+        else:
+            depth = torch.zeros(self.num_joints, dtype=torch.float32)
+
+        gt2Dcrop = torch.cat([uv, depth[:, None]], dim=1).float()
+        original_depth = (
+            sample["keypoints_3d"][:, 2].clone()
+            if sample["keypoints_3d"] is not None
+            else (depth * (self._cube[2] / 2.0) + com_z)
+        )
+        gt2Dorignal = torch.cat([uv.clone(), original_depth[:, None]], dim=1).float()
+        gt3Dorignal = (
+            sample["keypoints_3d"].float()
+            if sample["keypoints_3d"] is not None
+            else torch.zeros((self.num_joints, 3), dtype=torch.float32)
+        )
+        com = torch.tensor([self._crop_size / 2.0, self._crop_size / 2.0, com_z], dtype=torch.float32)
+        M_inv = torch.eye(4, dtype=torch.float32)
+        cubesize = torch.from_numpy(self._cube.copy()).float()
+        joint_mask = torch.ones((self.num_joints, 1), dtype=torch.float32)
+        visible_mask = torch.ones((self.num_joints, 1), dtype=torch.float32)
+        M = torch.eye(4, dtype=torch.float32)
+
+        return image, gt2Dcrop, gt2Dorignal, gt3Dorignal, com, M_inv, cubesize, joint_mask, visible_mask, M
+
+    def convert_uvd_to_xyz_tensor(self, uvd):
+        return uvd
 
 class HandPoseDataset(Dataset):
     def __init__(self, 

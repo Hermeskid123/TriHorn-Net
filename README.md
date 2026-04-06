@@ -74,6 +74,15 @@ The results will be saved in a file named ”results.txt”.
    ```bash
    bash train_eval_MSRA.bash
    ```
+
+4. DART
+
+   ```bash
+   bash train_eval_DART.bash
+   ```
+   DART data is loaded through `dart_data_loader.py` and expects one of these layouts:
+   - `DART_ROOT/images` + `DART_ROOT/labels.pkl`
+   - `DART_ROOT/<sequence_name>/output.pkl` with images inside each sequence folder
    
 
 ## Baseline Model (ResNet18)

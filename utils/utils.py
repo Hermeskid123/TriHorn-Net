@@ -65,9 +65,9 @@ def DATA_Getters(args):
     cubic_size=[args.cubic_size,args.cubic_size,args.cubic_size]
     image_size=(args.cropSize,args.cropSize)
 
-    datase_length = DATASET_LENGTHS[args.dataset]
+    datase_length = DATASET_LENGTHS.get(args.dataset, 0)
     
-    if args.subsetLength==-1: #full dataset
+    if args.subsetLength==-1 or datase_length<=0: #full dataset
         labeled_subset=None
     else:
         np.random.seed(args.randseed)
@@ -105,6 +105,11 @@ def DATA_Getters(args):
         specs=dict(basepath= os.environ.get('MSRA_PATH', args.datasetpath), LeaveOut_subject=args.leaveout_subject , use_default_cube=args.use_default_cube)
         base_parameters.update(specs)
         labled_train=MSRAHandPoseDataset(**base_parameters)
+    elif args.dataset=="dart":
+        print("DART dataset will be used")
+        specs=dict(basepath=os.environ.get('DART_PATH', args.datasetpath))
+        base_parameters.update(specs)
+        labled_train=DartHandPoseDataset(**base_parameters)
 
 
     unlabeled_train = None
