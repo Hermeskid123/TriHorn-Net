@@ -79,7 +79,12 @@ class DartHandPoseDataset(Dataset):
             depth = torch.zeros(self.num_joints, dtype=torch.float32)
 
         gt2Dcrop = torch.cat([uv, depth[:, None]], dim=1).float()
-        gt2Dorignal = gt2Dcrop.clone()
+        original_depth = (
+            sample["keypoints_3d"][:, 2].clone()
+            if sample["keypoints_3d"] is not None
+            else (depth * (self._cube[2] / 2.0) + com_z)
+        )
+        gt2Dorignal = torch.cat([uv.clone(), original_depth[:, None]], dim=1).float()
         gt3Dorignal = (
             sample["keypoints_3d"].float()
             if sample["keypoints_3d"] is not None
