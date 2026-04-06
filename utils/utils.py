@@ -303,8 +303,6 @@ def model_builder(model_name,num_joints, args):
 
     arc_name = model_name.split("_")[0].lower()
 
-    
-    
     if arc_name == "hglass":
         from model_factory.hourglass import HourglassNet, Bottleneck
 
@@ -313,8 +311,12 @@ def model_builder(model_name,num_joints, args):
 
         return HourglassNet(Bottleneck, num_stacks=num_stack, num_blocks=num_blocks, num_classes=num_joints,BN=True,num_G=16, train_spread=args.train_spread)
 
-    
-    raise NotImplementedError
+    if model_name.lower() == "resnet18":
+        from model_factory.resnet_baseline import ResNet18Baseline
+
+        return ResNet18Baseline(num_joints=num_joints)
+
+    raise NotImplementedError(f"Unsupported model_name: {model_name}")
 
 
 

@@ -76,6 +76,21 @@ The results will be saved in a file named ”results.txt”.
    ```
    
 
+## Baseline Model (ResNet18)
+In addition to TriHorn-Net (`hglass_2_1`), this repo now supports a simple `resnet18` baseline that is trained with the same training pipeline and datasets (NYU, ICVL, MSRA).
+
+Use the new config files to run baseline experiments:
+- `configs/nyu_resnet18.yaml`
+- `configs/icvl_resnet18.yaml`
+- `configs/msra_resnet18.yaml`
+
+You can launch them directly with:
+- `bash train_eval_NYU_resnet18.bash`
+- `bash train_eval_ICVL_resnet18.bash`
+- `bash train_eval_MSRA_resnet18.bash`
+
+You can also set `model_name: resnet18` in any existing config file.
+
 ## Supported Datasets
 This repo supports using the following dataset for training and testing:
 

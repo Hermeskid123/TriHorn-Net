@@ -62,7 +62,9 @@ def Train(model, data_loaders, args,lossFunction, optimizer, device, scheduler, 
             scheduler.step()
 
         # Save the model
-        if is_main_process() and ( (args.num_epoch-epoch)<=20 or (epoch+1)%args.save_freq==0 ) and epoch!=0:
+        # Always save near the end of training (including single-epoch runs),
+        # or periodically according to save_freq.
+        if is_main_process() and ((args.num_epoch-epoch)<=20 or (epoch+1)%args.save_freq==0):
             model_name="savedModel_E{}.pt".format(epoch+1)
             make_checkpoint(model_name, model, optimizer, scheduler, args)
 

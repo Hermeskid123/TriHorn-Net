@@ -5,9 +5,9 @@ import time
 
 from utils.utils import  Normalize_depth, loss_masked
 
-FORWARD_PASS = {'hglass': "normal"}
+FORWARD_PASS = {'hglass': "normal", 'resnet18': "normal"}
 
-EVAL_FUNCTIONS = {'hglass': "normal"}
+EVAL_FUNCTIONS = {'hglass': "normal", 'resnet18': "normal"}
 
 ################ GETTERs ############################
 
