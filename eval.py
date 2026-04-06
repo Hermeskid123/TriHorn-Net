@@ -242,9 +242,14 @@ if __name__ == "__main__":
         )
     elif args.dataset == "dart":
         print("DART dataset will be used")
+        dart_basepath = (
+            setting.datasetpath
+            if getattr(setting, "datasetpath", None) not in (None, "")
+            else os.environ.get("DART_PATH")
+        )
         test_set = DartHandPoseDataset(
             train=False,
-            basepath=os.environ.get("DART_PATH", setting.datasetpath),
+            basepath=dart_basepath,
             cropSize=(setting.cropSize, setting.cropSize),
             cropSize3D=[setting.cubic_size, setting.cubic_size, setting.cubic_size],
         )
