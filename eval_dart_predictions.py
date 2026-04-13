@@ -3,6 +3,10 @@ import csv
 import os
 from pathlib import Path
 
+DEFAULT_CHECKPOINT = "checkpoints/savedModel_E60.pt"
+DEFAULT_DATASETPATH = "data/DART"
+
+
 def run_eval(
     model,
     loader,
@@ -133,9 +137,9 @@ def parse_args():
     )
     parser.add_argument(
         "--checkpoint",
-        default="",
+        default=DEFAULT_CHECKPOINT,
         type=str,
-        help="Path to a specific .pt checkpoint file. Optional if --path is provided.",
+        help="Path to a specific .pt checkpoint file.",
     )
     parser.add_argument(
         "--path",
@@ -145,9 +149,9 @@ def parse_args():
     )
     parser.add_argument(
         "--datasetpath",
-        default="",
+        default=DEFAULT_DATASETPATH,
         type=str,
-        help="Path to DART root. Optional: falls back to checkpoint args.datasetpath or $DART_PATH.",
+        help="Path to DART root.",
     )
     parser.add_argument("--output_dir", default="dart_eval_outputs", type=str)
     parser.add_argument("--batch_size", default=32, type=int)
@@ -171,7 +175,10 @@ def _resolve_checkpoint_path(args) -> Path:
         checkpoint = Path(args.checkpoint)
         if checkpoint.is_file():
             return checkpoint
-        raise FileNotFoundError(f"Checkpoint file not found: {checkpoint}")
+        print(
+            f"Warning: default checkpoint file was not found at '{checkpoint}'. "
+            "Falling back to directory-based checkpoint search."
+        )
 
     if args.path:
         ckpt_dir = Path(args.path)
@@ -215,13 +222,14 @@ def main():
     setting.dataset = "dart"
 
     datasetpath = args.datasetpath
-    if datasetpath in ("", None):
-        datasetpath = getattr(setting, "datasetpath", "")
-    if datasetpath in ("", None):
-        datasetpath = os.environ.get("DART_PATH", "")
-    if datasetpath in ("", None):
+    if not Path(datasetpath).exists():
+        datasetpath = getattr(setting, "datasetpath", datasetpath)
+    if not Path(datasetpath).exists():
+        datasetpath = os.environ.get("DART_PATH", datasetpath)
+    if not Path(datasetpath).exists():
         raise ValueError(
-            "DART dataset path is missing. Set --datasetpath, or store datasetpath in checkpoint args, or export DART_PATH."
+            f"DART dataset path does not exist: '{args.datasetpath}'. "
+            "Please pass a valid --datasetpath."
         )
 
     device = torch.device(
