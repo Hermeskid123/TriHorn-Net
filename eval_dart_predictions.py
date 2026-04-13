@@ -1,6 +1,7 @@
 import argparse
 import csv
 import os
+import re
 from pathlib import Path
 
 DEFAULT_CHECKPOINT = "checkpoints/savedModel_E60.pt"
@@ -81,7 +82,10 @@ def run_eval(
                     gt_uvd,
                     base_image=sample_for_viz["image"],
                 )
-                out_path = image_output_dir / f"{dataset_index:06d}_{image_name}.png"
+                rounded_loss = int(round(float(sample_err.mean())))
+                pose_match = re.search(r"\d+", image_name)
+                pose_number = pose_match.group(0) if pose_match is not None else f"{dataset_index:06d}"
+                out_path = image_output_dir / f"{dataset_index:06d}_{pose_number}_{rounded_loss}.png"
                 rendered.save(out_path)
 
     mean_l2 = total_error / max(total_points, 1)
