@@ -83,6 +83,7 @@ def run_eval(
 
 
 def render_overlay(input_image, pred_uvd, gt_uvd):
+    import numpy as np
     from PIL import Image, ImageDraw
 
     img = ((input_image + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
