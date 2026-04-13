@@ -74,7 +74,13 @@ def run_eval(
                     }
                 )
 
-                rendered = render_overlay(imgs_np[sample_in_batch, 0], pred_uvd, gt_uvd)
+                sample_for_viz = loader.dataset.dataset[mapped_index]
+                rendered = render_overlay(
+                    imgs_np[sample_in_batch, 0],
+                    pred_uvd,
+                    gt_uvd,
+                    base_image=sample_for_viz["image"],
+                )
                 out_path = image_output_dir / f"{dataset_index:06d}_{image_name}.png"
                 rendered.save(out_path)
 
@@ -82,12 +88,16 @@ def run_eval(
     return all_rows, mean_l2
 
 
-def render_overlay(input_image, pred_uvd, gt_uvd):
+def render_overlay(input_image, pred_uvd, gt_uvd, base_image=None):
     import numpy as np
     from PIL import Image, ImageDraw
 
-    img = ((input_image + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
-    canvas = Image.fromarray(img, mode="L").convert("RGB")
+    if base_image is not None:
+        canvas = base_image.convert("RGB")
+    else:
+        img = ((input_image + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
+        canvas = Image.fromarray(img, mode="L").convert("RGB")
+
     draw = ImageDraw.Draw(canvas)
 
     for joint_idx in range(gt_uvd.shape[0]):
