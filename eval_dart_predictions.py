@@ -3,17 +3,6 @@ import csv
 import os
 from pathlib import Path
 
-import cv2
-import numpy as np
-import torch
-from torch.utils.data import DataLoader
-
-from dataloader import DartHandPoseDataset
-from utils.forwardpass import get_EvalFunction
-from utils.utils import model_builder
-
-
-@torch.no_grad()
 def run_eval(
     model,
     loader,
@@ -22,95 +11,95 @@ def run_eval(
     device,
     image_output_dir,
 ):
+    import numpy as np
+    import torch
+
     model.eval()
 
     all_rows = []
     total_error = 0.0
     total_points = 0
 
-    for batch_idx, data in enumerate(loader):
-        (
-            inputs,
-            _gt2Dcrop,
-            gt2Dorignal,
-            _gt3Dorignal,
-            com,
-            _M_inv,
-            cubesize,
-            *_rest,
-        ) = data
+    with torch.no_grad():
+        for batch_idx, data in enumerate(loader):
+            (
+                inputs,
+                _gt2Dcrop,
+                gt2Dorignal,
+                _gt3Dorignal,
+                com,
+                _M_inv,
+                cubesize,
+                *_rest,
+            ) = data
 
-        inputs = inputs.to(device)
-        gt2Dorignal = gt2Dorignal.to(device)
-        com = com.to(device)
-        cubesize = cubesize.to(device)
+            inputs = inputs.to(device)
+            gt2Dorignal = gt2Dorignal.to(device)
+            com = com.to(device)
+            cubesize = cubesize.to(device)
 
-        outputs = model(inputs)
-        preds = eval_function(inputs, outputs, cubesize, com, setting)
+            outputs = model(inputs)
+            preds = eval_function(inputs, outputs, cubesize, com, setting)
 
-        preds_np = preds.detach().cpu().numpy()
-        gts_np = gt2Dorignal.detach().cpu().numpy()
-        imgs_np = inputs.detach().cpu().numpy()
+            preds_np = preds.detach().cpu().numpy()
+            gts_np = gt2Dorignal.detach().cpu().numpy()
+            imgs_np = inputs.detach().cpu().numpy()
 
-        batch_start = batch_idx * loader.batch_size
+            batch_start = batch_idx * loader.batch_size
 
-        for sample_in_batch in range(preds_np.shape[0]):
-            dataset_index = batch_start + sample_in_batch
-            mapped_index = loader.dataset.indeces[dataset_index]
-            raw_sample = loader.dataset.dataset.samples[mapped_index]
-            image_name = Path(raw_sample["image_path"]).stem
+            for sample_in_batch in range(preds_np.shape[0]):
+                dataset_index = batch_start + sample_in_batch
+                mapped_index = loader.dataset.indeces[dataset_index]
+                raw_sample = loader.dataset.dataset.samples[mapped_index]
+                image_name = Path(raw_sample["image_path"]).stem
 
-            pred_uvd = preds_np[sample_in_batch]
-            gt_uvd = gts_np[sample_in_batch]
+                pred_uvd = preds_np[sample_in_batch]
+                gt_uvd = gts_np[sample_in_batch]
 
-            sample_err = np.linalg.norm(pred_uvd - gt_uvd, axis=1)
-            total_error += float(sample_err.sum())
-            total_points += int(sample_err.shape[0])
+                sample_err = np.linalg.norm(pred_uvd - gt_uvd, axis=1)
+                total_error += float(sample_err.sum())
+                total_points += int(sample_err.shape[0])
 
-            all_rows.append(
-                {
-                    "sample_index": dataset_index,
-                    "image_path": raw_sample["image_path"],
-                    "pred_uvd": pred_uvd.copy(),
-                    "gt_uvd": gt_uvd.copy(),
-                    "mean_l2_error": float(sample_err.mean()),
-                }
-            )
+                all_rows.append(
+                    {
+                        "sample_index": dataset_index,
+                        "image_path": raw_sample["image_path"],
+                        "pred_uvd": pred_uvd.copy(),
+                        "gt_uvd": gt_uvd.copy(),
+                        "mean_l2_error": float(sample_err.mean()),
+                    }
+                )
 
-            rendered = render_overlay(imgs_np[sample_in_batch, 0], pred_uvd, gt_uvd)
-            out_path = image_output_dir / f"{dataset_index:06d}_{image_name}.png"
-            cv2.imwrite(str(out_path), rendered)
+                rendered = render_overlay(imgs_np[sample_in_batch, 0], pred_uvd, gt_uvd)
+                out_path = image_output_dir / f"{dataset_index:06d}_{image_name}.png"
+                rendered.save(out_path)
 
     mean_l2 = total_error / max(total_points, 1)
     return all_rows, mean_l2
 
 
 def render_overlay(input_image, pred_uvd, gt_uvd):
+    from PIL import Image, ImageDraw
+
     img = ((input_image + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
-    canvas = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    canvas = Image.fromarray(img, mode="L").convert("RGB")
+    draw = ImageDraw.Draw(canvas)
 
     for joint_idx in range(gt_uvd.shape[0]):
         gx, gy = int(round(gt_uvd[joint_idx, 0])), int(round(gt_uvd[joint_idx, 1]))
         px, py = int(round(pred_uvd[joint_idx, 0])), int(round(pred_uvd[joint_idx, 1]))
 
-        cv2.circle(canvas, (gx, gy), 3, (0, 255, 0), thickness=-1)
-        cv2.circle(canvas, (px, py), 3, (0, 0, 255), thickness=-1)
-        cv2.line(canvas, (gx, gy), (px, py), (255, 0, 0), thickness=1)
+        draw.ellipse((gx - 3, gy - 3, gx + 3, gy + 3), fill=(0, 255, 0))
+        draw.ellipse((px - 3, py - 3, px + 3, py + 3), fill=(255, 0, 0))
+        draw.line((gx, gy, px, py), fill=(0, 0, 255), width=1)
 
-    cv2.putText(
-        canvas,
-        "GT=green Pred=red",
-        (8, 20),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.5,
-        (255, 255, 255),
-        1,
-        cv2.LINE_AA,
-    )
+    draw.text((8, 8), "GT=green Pred=red", fill=(255, 255, 255))
     return canvas
 
 
 def save_predictions(rows, output_csv, output_npz):
+    import numpy as np
+
     output_csv.parent.mkdir(parents=True, exist_ok=True)
 
     with output_csv.open("w", newline="") as f:
@@ -142,8 +131,24 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Evaluate DART dataset, save predictions, and dump per-image overlays."
     )
-    parser.add_argument("--checkpoint", required=True, type=str, help="Path to .pt checkpoint")
-    parser.add_argument("--datasetpath", required=True, type=str, help="Path to DART root")
+    parser.add_argument(
+        "--checkpoint",
+        default="",
+        type=str,
+        help="Path to a specific .pt checkpoint file. Optional if --path is provided.",
+    )
+    parser.add_argument(
+        "--path",
+        default="",
+        type=str,
+        help="Checkpoint directory (e.g., experiment/checkpoints). If set, newest savedModel_E*.pt is used.",
+    )
+    parser.add_argument(
+        "--datasetpath",
+        default="",
+        type=str,
+        help="Path to DART root. Optional: falls back to checkpoint args.datasetpath or $DART_PATH.",
+    )
     parser.add_argument("--output_dir", default="dart_eval_outputs", type=str)
     parser.add_argument("--batch_size", default=32, type=int)
     parser.add_argument("--num_workers", default=4, type=int)
@@ -151,12 +156,73 @@ def parse_args():
     return parser.parse_args()
 
 
+def _extract_epoch_number(path_obj: Path) -> int:
+    name = path_obj.stem
+    if "E" in name:
+        try:
+            return int(name.split("E")[-1])
+        except ValueError:
+            return -1
+    return -1
+
+
+def _resolve_checkpoint_path(args) -> Path:
+    if args.checkpoint:
+        checkpoint = Path(args.checkpoint)
+        if checkpoint.is_file():
+            return checkpoint
+        raise FileNotFoundError(f"Checkpoint file not found: {checkpoint}")
+
+    if args.path:
+        ckpt_dir = Path(args.path)
+        if not ckpt_dir.is_dir():
+            raise FileNotFoundError(f"Checkpoint directory not found: {ckpt_dir}")
+
+        candidates = sorted(ckpt_dir.glob("savedModel_E*.pt"), key=_extract_epoch_number)
+        if not candidates:
+            candidates = sorted(ckpt_dir.glob("*.pt"), key=_extract_epoch_number)
+        if not candidates:
+            raise FileNotFoundError(
+                f"No checkpoint files were found under: {ckpt_dir}"
+            )
+        return candidates[-1]
+
+    default_dir = Path("checkpoints")
+    if default_dir.is_dir():
+        candidates = sorted(default_dir.glob("savedModel_E*.pt"), key=_extract_epoch_number)
+        if candidates:
+            return candidates[-1]
+
+    raise ValueError(
+        "Provide either --checkpoint <file> or --path <checkpoint_dir>. "
+        "No default checkpoint could be resolved."
+    )
+
+
 def main():
     args = parse_args()
 
-    ckpt = torch.load(args.checkpoint, map_location="cpu")
+    import torch
+    from torch.utils.data import DataLoader
+
+    from dataloader import DartHandPoseDataset
+    from utils.forwardpass import get_EvalFunction
+    from utils.utils import model_builder
+
+    checkpoint_path = _resolve_checkpoint_path(args)
+    ckpt = torch.load(checkpoint_path, map_location="cpu")
     setting = ckpt["args"]
     setting.dataset = "dart"
+
+    datasetpath = args.datasetpath
+    if datasetpath in ("", None):
+        datasetpath = getattr(setting, "datasetpath", "")
+    if datasetpath in ("", None):
+        datasetpath = os.environ.get("DART_PATH", "")
+    if datasetpath in ("", None):
+        raise ValueError(
+            "DART dataset path is missing. Set --datasetpath, or store datasetpath in checkpoint args, or export DART_PATH."
+        )
 
     device = torch.device(
         f"cuda:{args.cuda_id}" if torch.cuda.is_available() else "cpu"
@@ -164,7 +230,7 @@ def main():
 
     dataset = DartHandPoseDataset(
         train=False,
-        basepath=args.datasetpath,
+        basepath=datasetpath,
         cropSize=(setting.cropSize, setting.cropSize),
         cropSize3D=[setting.cubic_size, setting.cubic_size, setting.cubic_size],
     )
@@ -200,6 +266,8 @@ def main():
     npz_path = output_dir / "predictions.npz"
     save_predictions(rows, csv_path, npz_path)
 
+    print(f"Checkpoint: {checkpoint_path}")
+    print(f"Dataset: {datasetpath}")
     print(f"Saved {len(rows)} predictions")
     print(f"CSV: {csv_path}")
     print(f"NPZ: {npz_path}")
